@@ -1,0 +1,100 @@
+---
+title: "Predicción deserción"
+author: "Jorge y Jenny"
+date: "20/11/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Librerías
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(GGally)
+library(mltools)
+library(data.table)
+```
+
+# Carga de datos
+
+```{r}
+raw_desercion <- read_excel("../src/Desercion.xlsx")
+```
+
+# Limpieza de datos
+
+```{r}
+desercion_limpia <- raw_desercion %>%
+  mutate(across(everything(), ~na_if(., "SIN_INF"))) %>% 
+  mutate(across(everything(), ~na_if(., "NA"))) %>% 
+  filter(ESTRATO != 0,
+         ESTRATO != 6) %>% #OJO CAMBIAR ESTRATO 6 CON SOBREMUESTREO
+  mutate(across(c(SEXO, DEPARTAMENTO_NACE, DEPARTAMENTO_VIVE, COLEGIO,
+         NATURALEZA_COLE, TIPO_ACEPTACION, COD_PROGRAMA, PROGRAMA, 
+         RANGO, `estu_area_residePruebas de estado`, `cole_valor_pensionPruebas de estado`, fami_educa_padre:cole_caracter), as_factor)) %>%
+  as.data.table() %>% 
+  one_hot(sparsifyNAs = TRUE)
+  #%>% 
+  #select() seleccionar las variables que sí son útiles!!!
+
+
+desercion_limpia_nona <- desercion_limpia[complete.cases(desercion_limpia),] 
+```
+
+# Analítica descriptiva
+
+Se selecciona la variable estrato como variable a predecir
+
+## Validación de tipos
+
+```{r}
+raw_desercion %>% 
+  glimpse()
+```
+
+## Gráficos descriptivos
+
+### Valores numéricos relevantes
+
+```{r}
+bd_numericos_relevantes <- raw_desercion %>% 
+  select(where(is.numeric)) %>%
+  select(ESTRATO, Edad_Ingreso, IND_POBREZA, IND_POBREZA_COL, VERSION, PROMEDIO_ULTIMO_SEMESTRE_TERMINADO:NUMSEMESTRES, Puntaje1_s, Puntaje2_s, `estu_edad Pruebas de estado`:Ingles)
+```
+
+### Correlación
+
+```{r}
+bd_numericos_relevantes %>% 
+  ggcorr(label = TRUE)
+
+pares_cor <- bd_numericos_relevantes %>%
+  select(-VERSION, -NUMSEMESTRES, -PERIODOS_PRUEBA_PROGRAMA, 
+         -NIVEL_PREGRADO, -CREDITOS_ULTIM_SEMEST_MATRIC) %>% 
+  mutate(ESTRATO = as_factor(ESTRATO)) %>% 
+  ggpairs(mapping = aes(color = ESTRATO),
+          lower = list(continuous = wrap("points", alpha = 0.6)))
+
+ggsave("../outputs/pares_correlacionados_num.png", 
+       plot = pares_cor, 
+       width = 50, 
+       height = 50, 
+       units = "cm")
+
+
+```
+
+# Escritura
+
+```{r}
+write_rds(desercion_limpia, "../src/desercion_limpia.rds")
+write_rds(desercion_limpia_nona, "../src/desercion_limpia_nona.rds")
+```
+
+

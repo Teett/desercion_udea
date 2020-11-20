@@ -1,0 +1,46 @@
+---
+title: "Modelamiento"
+author: "Jorge y Jenny"
+date: "20/11/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Librerías
+
+```{r}
+library(tidyverse)
+library(glmnet)
+```
+
+
+# Lectura de bases de datos limpias
+
+```{r}
+desercion_limpia_nona <- read_rds("../src/desercion_limpia_nona.rds")
+```
+
+# Regresión lineal múltiple
+
+```{r}
+design_matrix <- desercion_limpia_nona %>%
+  as_tibble() %>% 
+ select(-ESTRATO) %>% 
+  as.matrix()
+
+model.matrix(~., desercion_limpia_nona %>%
+  as_tibble() %>% 
+    select(-ESTRATO))
+
+response_var <- as_factor(desercion_limpia_nona$ESTRATO)
+
+reg_multinomial <- glmnet(design_matrix, 
+                     response_var, 
+                     family = "multinomial")
+```
+
