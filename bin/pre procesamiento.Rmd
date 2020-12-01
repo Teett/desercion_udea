@@ -37,8 +37,9 @@ desercion_limpia <- raw_desercion %>%
          ESTRATO != 6) %>% #OJO CAMBIAR ESTRATO 6 CON SOBREMUESTREO
   mutate(across(c(SEXO, DEPARTAMENTO_NACE, DEPARTAMENTO_VIVE, COLEGIO,
          NATURALEZA_COLE, TIPO_ACEPTACION, COD_PROGRAMA, PROGRAMA, 
-         RANGO, `estu_area_residePruebas de estado`, `cole_valor_pensionPruebas de estado`, fami_educa_padre:cole_caracter), as_factor)) %>%
-  as.data.table() %>% 
+         RANGO, `estu_area_residePruebas de estado`, `cole_valor_pensionPruebas de estado`, fami_educa_padre:cole_caracter, MODALIDAD), as_factor)) %>%
+  as.data.table() %>%
+  select(-DEPARTAMENTO_NACE, -DEPARTAMENTO_VIVE, -COLEGIO, -SEDE, -Prueba1_estan, -Prueba2_estan, -ESTADO2, -`periodo_completo Pruebas de estado`) %>% 
   one_hot(sparsifyNAs = TRUE)
   #%>% 
   #select() seleccionar las variables que sí son útiles!!!

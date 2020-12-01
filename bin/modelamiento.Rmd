@@ -37,10 +37,11 @@ model.matrix(~., desercion_limpia_nona %>%
   as_tibble() %>% 
     select(-ESTRATO))
 
-response_var <- as_factor(desercion_limpia_nona$ESTRATO)
+response_var <- as.numeric(desercion_limpia_nona$ESTRATO)
 
 reg_multinomial <- glmnet(design_matrix, 
                      response_var, 
                      family = "multinomial")
 ```
+
 
