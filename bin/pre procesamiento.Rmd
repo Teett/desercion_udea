@@ -24,7 +24,14 @@ library(data.table)
 # Carga de datos
 
 ```{r}
-raw_desercion <- read_excel("../src/Desercion.xlsx")
+raw_desercion <- read_excel("../src/Desercion.xlsx") %>% 
+  relocate(ESTRATO) %>% 
+  rename("PeriodoC_P_estado" = `periodo_completo Pruebas de estado`,
+         "P_Prueba_estado" = `periodo Pruebas de estado`,
+         "Psemestre_P_estado" = `periodo_semestre Pruebas de estado`,
+         "Edad_P_estado" = `estu_edad Pruebas de estado`,
+         "Area_P_estado" = `estu_area_residePruebas de estado`,
+         "Valor_pension" =`cole_valor_pensionPruebas de estado`)
 ```
 
 # Limpieza de datos
@@ -33,18 +40,38 @@ raw_desercion <- read_excel("../src/Desercion.xlsx")
 desercion_limpia <- raw_desercion %>%
   mutate(across(everything(), ~na_if(., "SIN_INF"))) %>% 
   mutate(across(everything(), ~na_if(., "NA"))) %>% 
-  filter(ESTRATO != 0,
-         ESTRATO != 6) %>% #OJO CAMBIAR ESTRATO 6 CON SOBREMUESTREO
   mutate(across(c(SEXO, DEPARTAMENTO_NACE, DEPARTAMENTO_VIVE, COLEGIO,
          NATURALEZA_COLE, TIPO_ACEPTACION, COD_PROGRAMA, PROGRAMA, 
-         RANGO, `estu_area_residePruebas de estado`, `cole_valor_pensionPruebas de estado`, fami_educa_padre:cole_caracter, MODALIDAD), as_factor)) %>%
+         RANGO, Area_P_estado, Valor_pension, fami_educa_padre:cole_caracter, MODALIDAD), as_factor)) %>%
+  select(-DEPARTAMENTO_NACE, -estu_nacimiento_anno,-estu_nacimiento_mes, -estu_nacimiento_dia, -SEDE,-PROGRAMA, -MODALIDAD, -Prueba1_estan, -Prueba2_estan, -ESTADO2, -SEMESTRE_INICIA_PROGRAMA, -ULTIMO_SEMESTRE_TERMINADO, -PeriodoC_P_estado, -P_Prueba_estado, -COLEGIO) %>% 
   as.data.table() %>%
-  select(-DEPARTAMENTO_NACE, -DEPARTAMENTO_VIVE, -COLEGIO, -SEDE, -Prueba1_estan, -Prueba2_estan, -ESTADO2, -`periodo_completo Pruebas de estado`) %>% 
-  one_hot(sparsifyNAs = TRUE)
-  #%>% 
-  #select() seleccionar las variables que sí son útiles!!!
+  one_hot(sparsifyNAs = TRUE) %>% 
+  mutate(ESTRATO_NUEVO = as_factor(case_when(ESTRATO == 0 | ESTRATO == 1 | ESTRATO == 2 ~ "Bajo",
+                                   ESTRATO == 3 | ESTRATO == 4 ~ "Medio",
+                                   ESTRATO == 5 | ESTRATO == 6 ~ "Alto",
+                                   TRUE ~ NA_character_))) %>% 
+  select(-ESTRATO) %>% 
+  relocate(ESTRATO_NUEVO)
+```
 
+## Limpiar nombres de las columnas
 
+```{r}
+names(desercion_limpia) = make.names(names(desercion_limpia))
+```
+
+##   Análisis de datos faltantes   
+
+Se revisa si los datos tienen registros faltantes y las dimenssiones de la base datos
+
+```{r}
+1 - (sum(complete.cases(desercion_limpia)) / nrow(desercion_limpia))
+dim(desercion_limpia)
+```
+
+## Selección de los NO NA
+
+```{r}
 desercion_limpia_nona <- desercion_limpia[complete.cases(desercion_limpia),] 
 ```
 

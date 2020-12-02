@@ -16,6 +16,11 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(tidyverse)
 library(glmnet)
+library(caTools)
+library(yardstick)
+library(class)
+library(e1071)
+library(caret)
 ```
 
 
@@ -25,23 +30,116 @@ library(glmnet)
 desercion_limpia_nona <- read_rds("../src/desercion_limpia_nona.rds")
 ```
 
-# Regresión lineal múltiple
+# Escalamiento de datos
 
 ```{r}
-design_matrix <- desercion_limpia_nona %>%
+variables_escaladas <- desercion_limpia_nona %>%
+  select(Edad_Ingreso, IND_POBREZA, IND_POBREZA_COL, VERSION, PROMEDIO_ULTIMO_SEMESTRE_TERMINADO, CREDITOS_ULTIM_SEMEST_MATRIC, PROMEDIO_PROGRAMA, CRED_CURS_PROG:CREDGRADO, Ano_titulo, Puntaje1_s, Puntaje2_s, Psemestre_P_estado, Edad_P_estado, NUMSEMESTRES, Lenguaje:Ingles) %>% 
+  mutate(across(everything(), scale))
+
+desercion_escalada <- desercion_limpia_nona %>%
   as_tibble() %>% 
- select(-ESTRATO) %>% 
-  as.matrix()
-
-model.matrix(~., desercion_limpia_nona %>%
-  as_tibble() %>% 
-    select(-ESTRATO))
-
-response_var <- as.numeric(desercion_limpia_nona$ESTRATO)
-
-reg_multinomial <- glmnet(design_matrix, 
-                     response_var, 
-                     family = "multinomial")
+  select(-names(variables_escaladas)) %>%
+  bind_cols(variables_escaladas) %>% 
+  unnest(cols = names(variables_escaladas)) %>% 
+  as.data.table() # %>% 
+  # select(ESTRATO_NUEVO, Lenguaje:Ingles, IND_POBREZA, IND_POBREZA_COL, Puntaje1_s, Puntaje2_s, Edad_P_estado, PROMEDIO_PROGRAMA, PROMEDIO_ULTIMO_SEMESTRE_TERMINADO, Valor_pension_No.paga:Valor_pension_250.000.o.más)
 ```
 
+# Separación de conjunto de entrenamiento y de prueba
+
+```{r}
+set.seed(1234)
+
+split2 <- sample.split(desercion_escalada$ESTRATO_NUEVO, SplitRatio = 0.80)
+training_set <- subset(desercion_escalada, split2 == TRUE)
+test_set <- subset(desercion_escalada, split2 == FALSE)
+```
+
+
+# Regresión lineal múltiple multinomial
+
+```{r}
+design_matrix <- training_set %>%
+  as_tibble() %>% 
+ select(-ESTRATO_NUEVO) %>% 
+  as.matrix()
+
+response_var <- as.numeric(training_set$ESTRATO_NUEVO)
+
+reg_multinomial <- cv.glmnet(design_matrix, 
+                     response_var, 
+                     family = "multinomial",
+                     parallel = TRUE)
+
+design_matrix_test <- test_set %>% 
+    as_tibble() %>% 
+ select(-ESTRATO_NUEVO) %>% 
+  as.matrix()
+
+pred_reg_multinomial <- predict(reg_multinomial, 
+                                newx = design_matrix_test, 
+                                s = "lambda.min", 
+                                type = "class")
+
+reg_multinomial_class <- tibble(pred = as_factor(pred_reg_multinomial[,1]), 
+                                real = test_set$ESTRATO_NUEVO)
+
+levels(reg_multinomial_class$pred) = c("Bajo", "Medio", "Alto")
+
+reg_multinomial_class %>% 
+conf_mat(truth = real, estimate = pred) %>% 
+  autoplot(type = "heatmap") + 
+  labs(title = "Matriz de confusión para la regresión logística multinomial")
+
+reg_multinomial_class %>% 
+  metrics(truth = real, estimate = pred)
+```
+
+Resultado:
+
+  .metric  .estimator .estimate
+  <chr>    <chr>          <dbl>
+1 accuracy multiclass     0.690
+2 kap      multiclass     0.396
+
+# MODELO k - Vecinos Cercanos sin optimizacion
+
+```{r}
+set.seed(1234)
+modelo_KNN <- knn(training_set[, -1], 
+                      test_set[, -1], 
+                      cl = training_set$ESTRATO_NUEVO,
+                      k = 5)
+
+knn_no_optim_class <- tibble(pred = as_factor(modelo_KNN), 
+                                real = test_set$ESTRATO_NUEVO)
+
+levels(knn_no_optim_class$pred) = c("Bajo", "Medio", "Alto")
+
+knn_no_optim_class %>% 
+conf_mat(truth = real, estimate = pred) %>% 
+  autoplot(type = "heatmap") + 
+  labs(title = "Matriz de confusión para el KNN no optimizado")
+
+tab <- table(test_set$ESTRATO_NUEVO, modelo_KNN, dnn = c("Actual", "Predicha"))
+confusionMatrix(tab)
+```
+
+# MODELO SVM sin optimizar
+
+```{r}
+set.seed(1234)
+Modelo_SVM <- svm(ESTRATO_NUEVO ~ ., data = training_set, 
+                       type = 'C-classification', kernel = 'radial')
+# Predicción
+pred_SVM <- predict(Modelo_SVM, newdata = test_set)
+```
+
+##   Matriz de confusion SVM    
+
+```{r}
+tab1 <- table(test_set$ESTRATO_NUEVO, pred_SVM, dnn = c("Actual", "Predicha"))
+confusionMatrix(tab1)
+```
 
